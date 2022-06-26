@@ -1,0 +1,28 @@
+#!/bin/sh
+#title           :getAPA
+#description     :Get APA citation for a given DOI or PDF file
+#author          :Carlos Vigil Vásquez
+#date            :20220626
+#version         :20220626a
+#notes           :Inspired in Luke Smith (https://lukesmith.xyz) implementation
+#copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl). Permission to copy and modify is granted under the MIT license
+
+[ -z "$1" ] && echo -e "Usage:\t $0 < /path/to/pdf/file | DOI >" && exit
+
+if [ -f "$1" ]; then
+    # Get DOI from file
+    DOI=$(pdfinfo "$1" | grep -io "doi:.*" -m 1) ||
+    DOI=$(pdftotext "$1" 2>/dev/null - | grep -io "doi:.*" -m 1) ||
+    exit "BIB not found for $1" 1
+elif [[ "$1" != *"https://doi.org/"* ]]; then
+    # Input DOI code
+	DOI="https://doi.org/$1"
+else
+    # Input DOI URL
+    DOI="$1"
+fi
+
+DOI=$(echo -e "${DOI}" | tr -d '[:space:]')
+
+# Check crossfref.org for the bib citation
+curl -LH "Accept: text/x-bibliography; style=apa" -w "\\n" $DOI
