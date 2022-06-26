@@ -1,0 +1,29 @@
+#!/bin/sh
+#title           :colores
+#description     :Show terminal colors
+#author          :Carlos Vigil Vásquez
+#date            :20200101
+#version         :20200101a
+#notes           :
+#copyright       :Copyright (C) 2020 Carlos Vigil Vásquez (cvigil2@uc.cl). Permission to copy and modify is granted under the MIT license
+
+# Get all colors available for terminal
+f=3 b=4
+for j in f b; do
+    for i in {0..9}; do
+        printf -v $j$i %b "\e[${!j}${i}m"
+    done
+done
+
+# Assign normal and bold variants to variable
+bld=$'\e[1m'
+rst=$'\e[0m'
+
+# Show colors in terminal
+cat << EOF
+colores - v20200101a
+
+N: $f1███$f2███$f3███$f4███$f5███$f6███$f7███$rst
+B: $bld$f1███$f2███$f3███$f4███$f5███$f6███$f7███$rst
+
+EOF
