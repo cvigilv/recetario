@@ -2,9 +2,9 @@
 #title           :TverskyMatrix.jl
 #description     :Calculate Tversky index similarity matrix from feature matrix
 #author          :Carlos Vigil Vásquez
-#date            :20220511
-#version         :20220511a
-#notes           :Requires ArgParse.jl and ProgressMeter.jl
+#date            :20220706
+#version         :20220706a
+#notes           :Requires ArgParse.jl & ProgressMeter.jl. `julia -t NUM_THREADS` for threading
 #copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
 #license         :Permission to copy and modify is granted under the MIT license
 
@@ -12,23 +12,139 @@ using Base
 using ArgParse
 using DelimitedFiles
 using ProgressMeter
+using .Threads
 
 Base.setdiff(A::AbstractVector{Bool}, B::AbstractVector{Bool}) = @. A & !B
 
-Tversky(X::AbstractVector{Bool}, Y::AbstractVector{Bool}, α::AbstractFloat, β::AbstractFloat) = sum(X .& Y) / (sum(X .& Y) + α * sum(setdiff(X, Y)) + β * sum(setdiff(Y, X)))
-function Tversky(M::AbstractMatrix{Bool}, N::AbstractMatrix{Bool}, α::AbstractFloat, β::AbstractFloat)
+"""
+    Tversky(X::AbstractVector{Bool}, Y::AbstractVector{Bool}, α::Number, β::Number)
+
+Calculate the Tversky index between a pair of bit vectors.
+
+# Arguments
+- `M::AbstractMatrix{Bool}`: Bit matrix.
+- `N::AbstractMatrix{Bool}`: Bit matrix.
+- `α::AbstractFloat`: α coefficient.
+- `β::AbstractFloat`: β coefficient.
+
+# Examples
+```jldoctest
+julia> m = Vector{Bool}([1, 0, 0, 1, 0])
+5-element Vector{Bool}:
+ 1
+ 0
+ 0
+ 1
+ 0
+
+julia> n = Vector{Bool}([1, 0, 1, 1, 0])
+5-element Vector{Bool}:
+ 1
+ 0
+ 1
+ 1
+ 0
+
+julia> Tversky(m, n, 0.5, 0.5)    # Equivalent to Tanimoto coefficient
+0.8
+
+julia> Tversky(m, n, 1.0, 1.0)    # Equivalent to Sørensen–Dice coefficient
+0.6666666666666666
+
+julia> Tversky(m, n, 1.0, 0.0)    # "Superstructure-likeness" measure
+1.0
+
+julia> Tversky(m, n, 0.0, 1.0)    # "Substructure-likeness" measure
+0.6666666666666666
+```
+
+# Extended help
+Tversky index is equivalent to other similarity coefficients for some special cases:
+- For `α = β = 1.0`, Tversky index is equivalent to Tanimoto coefficient
+- For `α = β = 0.5`, Tversky index is equivalent to Sørensen–Dice coefficient
+- For `α = 1.0` & `β = 0.0`, Tversky index corresponds to a "superstucture-likeness" measure
+- For `α = 0.0` & `β = 1.0`, Tversky index corresponds to a "substucture-likeness" measure
+
+Tversky index does not meet the criteria for a similarity metric.
+"""
+function Tversky(X::T, Y::T, α::U, β::U) where {T<:AbstractVector{Bool},U<:Number}
+    # Check if coefficients are greater or equal to zero
+    @assert α ≥ 0 "α must be positive!"
+    @assert β ≥ 0 "β must be positive!"
+
+    # Check if both matrices have the same number of columns
+    @assert length(X) == length(Y)
+
+    return sum(X .& Y) / (sum(X .& Y) + α * sum(setdiff(X, Y)) + β * sum(setdiff(Y, X)))
+end
+
+"""
+    Tversky(M::AbstractMatrix{Bool}, N::AbstractMatrix{Bool}, α::Number, β::Number)
+
+Calculate the Tversky index between a pair of bit matrices.
+
+# Arguments
+- `M::AbstractMatrix{Bool}`: Bit matrix.
+- `N::AbstractMatrix{Bool}`: Bit matrix.
+- `α::AbstractFloat`: α coefficient.
+- `β::AbstractFloat`: β coefficient.
+
+# Examples
+```jldoctest
+julia> M = Matrix{Bool}([0 1 0 0 1; 1 0 1 0 0; 1 0 0 0 1; 0 0 1 0 0; 0 0 0 1 1])
+5×5 Matrix{Bool}:
+ 0  1  0  0  1
+ 1  0  1  0  0
+ 1  0  0  0  1
+ 0  0  1  0  0
+ 0  0  0  1  1
+
+julia> Tversky(M, M, 0.5, 0.5)
+5×5 Matrix{Float64}:
+ 1.0  0.0       0.5  0.0       0.5
+ 0.0  1.0       0.5  0.666667  0.0
+ 0.5  0.5       1.0  0.0       0.5
+ 0.0  0.666667  0.0  1.0       0.0
+ 0.5  0.0       0.5  0.0       1.0
+
+julia> Tversky(M, M, 1.0, 0.0)
+5×5 Matrix{Float64}:
+ 1.0  0.0  0.5  0.0  0.5
+ 0.0  1.0  0.5  0.5  0.0
+ 0.5  0.5  1.0  0.0  0.5
+ 0.0  1.0  0.0  1.0  0.0
+ 0.5  0.0  0.5  0.0  1.0
+```
+
+# Extended help
+Tversky index is equivalent to other similarity coefficients for some special cases:
+- For `α = β = 1.0`, Tversky index is equivalent to Tanimoto coefficient
+- For `α = β = 0.5`, Tversky index is equivalent to Sørensen–Dice coefficient
+- For `α = 1.0` & `β = 0.0`, Tversky index corresponds to a "superstucture-likeness" measure
+- For `α = 0.0` & `β = 1.0`, Tversky index corresponds to a "substucture-likeness" measure
+
+Tversky index does not meet the criteria for a similarity metric.
+"""
+function Tversky(M::T, N::T, α::U, β::U) where {T<:AbstractMatrix{Bool},U<:Number}
+    # Check if coefficients are greater or equal to 0
+    @assert α ≥ 0 "α must be positive!"
+    @assert β ≥ 0 "β must be positive!"
+
     # Check if both matrices have the same number of columns
     Mₘ, Mₙ = size(M)
     Nₘ, Nₙ = size(N)
-    @assert Mₙ == Nₙ
+    @assert Mₙ == Nₙ "Matrices should have the same amount of columns!"
 
     # Create measurement matrix
     MN = zeros(Mₘ, Nₘ)
-    for i in 1:Mₘ
+    pbar = Progress(Mₘ; showspeed=true)
+    @threads for i in 1:Mₘ
         for j in 1:Nₘ
-            MN[i, j] = Tversky(M[i, :], N[j, :], α, β)
+            @inbounds MN[i, j] = Tversky(M[i, :], N[j, :], α, β)
         end
+        next!(pbar)
     end
+
     return MN
 end
 
@@ -40,34 +156,38 @@ function main(args)
         "--MD", "-i"
         arg_type = String
         action = :store_arg
-        help = "M x D matrix"
+        help = "M × D matrix"
         required = true
         "--ND"
         arg_type = String
         action = :store_arg
-        help = "N x D matrix"
+        help = "N × D matrix"
         required = false
         "--MN", "-o"
         arg_type = String
         action = :store_arg
-        help = "M x N similarity matrix"
+        help = "M × N similarity matrix"
         required = true
+        "--delimiter", "-d"
+        arg_type = Char
+        action = :store_arg
+        help = "Delimiter character between bits"
+        required = false
+        default = ' '
+    end
+
+    add_arg_group!(configs, "Tversky index options (defaults to Tanimoto coefficient):")
+    @add_arg_table! configs begin
         "--alpha"
         arg_type = Float64
         action = :store_arg
         help = "α coefficient"
-        default = 0.5
+        default = 1.0
         "--beta"
         arg_type = Float64
         action = :store_arg
         help = "β coefficient"
-        default = 0.5
-        "--delimiter", "-d"
-        arg_type = Char
-        action = :store_arg
-        help = "Delimiter character between descriptor bits"
-        required = false
-        default = ' '
+        default = 1.0
     end
 
     # Argument parsing
@@ -78,10 +198,9 @@ function main(args)
     println("Calculating Tversky index matrix from file $(args["ND"])")
     MD = readdlm(args["MD"], args["delimiter"], Bool)
     ND = readdlm(args["ND"], args["delimiter"], Bool)
-    @assert size(MD, 2) == size(ND, 2)
 
     # Calculate similarity matrix and save
-	MN = Tversky(MD, ND, args["alpha"], args["beta"])
+    MN = Tversky(MD, ND, args["alpha"], args["beta"])
     writedlm(args["MN"], MN, args["delimiter"])
 end
 
