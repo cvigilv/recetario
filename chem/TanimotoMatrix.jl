@@ -2,8 +2,8 @@
 #title           :TanimotoMatrix.jl
 #description     :Calculate Tanimoto coefficient similarity matrix from feature matrix
 #author          :Carlos Vigil Vásquez
-#date            :20220511
-#version         :20220511a
+#date            :20220810
+#version         :20220810a
 #notes           :Requires ArgParse.jl and ProgressMeter.jl
 #copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
 #license         :Permission to copy and modify is granted under the MIT license
@@ -12,32 +12,77 @@ using Base
 using ArgParse
 using DelimitedFiles
 using ProgressMeter
+using LinearAlgebra
+using NamedArrays
+using .Threads
+include("../julia/named_array_helper.jl")
 
 Base.setdiff(A::AbstractVector{Bool}, B::AbstractVector{Bool}) = @. A & !B
 
-function _compare_matrices(M::AbstractMatrix, N::AbstractMatrix, ƒ::Function)
+ """
+    Tanimoto(X::AbstractVector{Bool}, Y::AbstractVector{Bool})
+"""
+function Tanimoto(X::T, Y::T) where {T<:AbstractVector{Bool}}
+    # Check if both matrices have the same number of columns
+    @assert length(X) == length(Y) "Vector have different sizes!"
+    return sum(X .& Y) / sum(X .| Y)
+end
+
+ """
+    Tanimoto(X::AbstractVector{Number}, Y::AbstractVector{Number})
+"""
+function Tanimoto(X::T, Y::T) where {T<:AbstractVector{Number}}
+    # Check if both matrices have the same number of columns
+    @assert length(X) == length(Y) "Vector have different sizes!"
+    return sum(X .* Y) / (sum(X .^ 2) + sum(Y .^ 2) - sum(X .* Y))
+end
+
+"""
+    Tanimoto(M::AbstractMatrix{Bool}, N::AbstractMatrix{Bool})
+"""
+function Tanimoto(M::T, N::T) where {T<:AbstractMatrix}
     # Check if both matrices have the same number of columns
     Mₘ, Mₙ = size(M)
     Nₘ, Nₙ = size(N)
-    @assert Mₙ == Nₙ
+    @assert Mₙ == Nₙ "Matrices should have the same amount of columns!"
 
     # Create measurement matrix
     MN = zeros(Mₘ, Nₘ)
-    for i in 1:Mₘ
+    pbar = Progress(Mₘ; showspeed=true)
+    @threads for i in 1:Mₘ
         for j in 1:Nₘ
-            MN[i, j] = ƒ(M[i, :], N[j, :])
+            @inbounds MN[i, j] = Tanimoto(M[i, :], N[j, :])
         end
+        next!(pbar)
     end
+
     return MN
 end
-_compare_matrix(M::AbstractMatrix, ƒ::Function) = _compare_matrices(M, M, ƒ)
 
-Tanimoto(X::AbstractVector{Bool}, Y::AbstractVector{Bool}) = sum(X .& Y) / sum(X .| Y)
-Tanimoto(X::AbstractVector{<:Number}, Y::AbstractVector{<:Number}) = sum(X .* Y) / (sum(X .^ 2) + sum(Y .^ 2) - sum(X .* Y))
-Tanimoto(M::AbstractMatrix) = _compare_matrix(M, Tanimoto)
-Tanimoto(M::AbstractMatrix, N::AbstractMatrix) = _compare_matrices(M, N, Tanimoto)
+"""
+    Tanimoto(M::T) where {T<:AbstractMatrix}
+"""
+function Tanimoto(M::T) where {T<:AbstractMatrix}
+    # Check if both matrices have the same number of columns
+    Mₘ, _ = size(M)
+
+    # Create measurement matrix
+    MM = zeros(Mₘ, Mₘ)
+    pbar = Progress(Mₘ; showspeed=true)
+    @threads for i in 1:Mₘ
+        for j in i:Mₘ
+            @inbounds MM[i, j] = Tanimoto(M[i, :], M[j, :])
+        end
+        next!(pbar)
+    end
+    MM .+= MM'
+    MM[diagind(MM)] ./= 2
+
+    return MM
+end
 
 function main(args)
+    # Argument parsing {{{
     configs = ArgParseSettings()
 
     add_arg_group!(configs, "I/O option:")
@@ -45,43 +90,52 @@ function main(args)
         "--MD", "-i"
         arg_type = String
         action = :store_arg
-        help = "M x F feature matrix file path"
+        help = "M × D matrix"
         required = true
         "--ND"
         arg_type = String
         action = :store_arg
-        help = "N x F feature matrix file path"
+        help = "N × D matrix"
         required = false
         "--MN", "-o"
         arg_type = String
         action = :store_arg
-        help = "M x N similarity matrix file path"
+        help = "M × N similarity matrix"
         required = true
+        "--named"
+        action = :store_true
+        help = "Matrix has index/names in first column"
         "--delimiter", "-d"
         arg_type = Char
         action = :store_arg
-        help = "Feature matrix delimiter"
+        help = "Delimiter character between bits"
         required = false
         default = ' '
-        "--binary"
-        action = :store_true
-        help = "Calculate similarity assuming binary feature"
     end
 
-    # Argument parsing
     args = parse_args(args, configs)
     args["ND"] = args["ND"] === nothing ? args["MD"] : args["ND"]
-    descriptor_type = args["binary"] ? Bool : Float64
+    # }}}
 
-    # Load matrices and get number of rows and columns per feature matrix
-    println("Calculating Tanimoto coefficient matrix from file $(args["ND"])")
-    MD = readdlm(args["MD"], args["delimiter"], descriptor_type)
-    ND = readdlm(args["ND"], args["delimiter"], descriptor_type)
-    @assert size(MD, 2) == size(ND, 2)
+    # Load matrices and get number of drugs, compounds, substructures and targets
+    println("Calculating Tversky index matrix from file $(args["ND"])")
+    MD = parse_matrix(readdlm(args["MD"], args["delimiter"], String), true, false; type=Bool)
+    ND = parse_matrix(readdlm(args["ND"], args["delimiter"], String), true, false; type=Bool)
 
     # Calculate similarity matrix and save
-    MN = Tanimoto(MD, ND)
+    if MD == ND
+        MN = Tanimoto(MD)
+    else
+        MN = Tanimoto(MD, ND)
+    end
+    if args["named"]
+        MN = NamedArray(MN)
+        setnames!(MN, names(MD, 1), 1)
+        setnames!(MN, names(ND, 1), 2)
+    end
     writedlm(args["MN"], MN, args["delimiter"])
 end
 
-main(ARGS)
+if abspath(PROGRAM_FILE) == @__FILE__
+    main(ARGS)
+end
