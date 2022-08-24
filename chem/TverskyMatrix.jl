@@ -2,8 +2,8 @@
 #title           :TverskyMatrix.jl
 #description     :Calculate Tversky index similarity matrix from feature matrix
 #author          :Carlos Vigil Vásquez
-#date            :20220706
-#version         :20220706a
+#date            :20220829
+#version         :20220829a
 #notes           :Requires ArgParse.jl & ProgressMeter.jl. `julia -t NUM_THREADS` for threading
 #copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
 #license         :Permission to copy and modify is granted under the MIT license
@@ -12,7 +12,9 @@ using Base
 using ArgParse
 using DelimitedFiles
 using ProgressMeter
+using NamedArrays
 using .Threads
+include("../julia/named_array_helper.jl")
 
 Base.setdiff(A::AbstractVector{Bool}, B::AbstractVector{Bool}) = @. A & !B
 
@@ -45,10 +47,10 @@ julia> n = Vector{Bool}([1, 0, 1, 1, 0])
  1
  0
 
-julia> Tversky(m, n, 0.5, 0.5)    # Equivalent to Tanimoto coefficient
+julia> Tversky(m, n, 0.5, 0.5)    # Equivalent to Sørensen–Dice coefficient
 0.8
 
-julia> Tversky(m, n, 1.0, 1.0)    # Equivalent to Sørensen–Dice coefficient
+julia> Tversky(m, n, 1.0, 1.0)    # Equivalent to Tanimoto coefficient
 0.6666666666666666
 
 julia> Tversky(m, n, 1.0, 0.0)    # "Superstructure-likeness" measure
@@ -149,6 +151,7 @@ function Tversky(M::T, N::T, α::U, β::U) where {T<:AbstractMatrix{Bool},U<:Num
 end
 
 function main(args)
+    # Argument parsing {{{
     configs = ArgParseSettings()
 
     add_arg_group!(configs, "I/O option:")
@@ -168,6 +171,9 @@ function main(args)
         action = :store_arg
         help = "M × N similarity matrix"
         required = true
+        "--named"
+        action = :store_true
+        help = "Matrix has index/names in first column"
         "--delimiter", "-d"
         arg_type = Char
         action = :store_arg
@@ -190,18 +196,25 @@ function main(args)
         default = 1.0
     end
 
-    # Argument parsing
     args = parse_args(args, configs)
     args["ND"] = args["ND"] === nothing ? args["MD"] : args["ND"]
+    # }}}
 
     # Load matrices and get number of drugs, compounds, substructures and targets
     println("Calculating Tversky index matrix from file $(args["ND"])")
-    MD = readdlm(args["MD"], args["delimiter"], Bool)
-    ND = readdlm(args["ND"], args["delimiter"], Bool)
+    MD = parse_matrix(readdlm(args["MD"], args["delimiter"], String), true, false; type=Bool)
+    ND = parse_matrix(readdlm(args["ND"], args["delimiter"], String), true, false; type=Bool)
 
     # Calculate similarity matrix and save
     MN = Tversky(MD, ND, args["alpha"], args["beta"])
+    if args["named"]
+        MN = NamedArray(MN)
+        setnames!(MN, names(MD, 1), 1)
+        setnames!(MN, names(ND, 1), 2)
+    end
     writedlm(args["MN"], MN, args["delimiter"])
 end
 
-main(ARGS)
+if abspath(PROGRAM_FILE) == @__FILE__
+    main(ARGS)
+end
