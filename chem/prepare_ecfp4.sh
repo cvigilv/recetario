@@ -2,21 +2,26 @@
 #title           :prepare_ecfp4.sh
 #description     :Calculate ECFP4 molecular descriptor
 #author          :Carlos Vigil Vásquez
-#date            :20220511
-#version         :20220511a
+#date            :20220824
+#version         :20220824a
 #notes           :Requires obabel
 #copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
 #license         :Permission to copy and modify is granted under the MIT license
 
 SMILES=$1
-ECFP4="$(echo $SMILES | sed s/SMILES/DS/ | sed s/smi/ecfp4.txt/)"
-
-# Calculate and clean-up descriptor
-obabel -ismi "$SMILES" -ofpt -O "/tmp/$(basename $ECFP4)" -xh -xfECFP4
+ECFP4="$(echo "$SMILES" | sed s/smi/ecfp4.txt/)"
 
 echo "Calculating OpenBabel's ECFP4 fingerprint for $1"
-cat "/tmp/$(basename $ECFP4)" |\
-	grep -v 'Possible superstructure of' |\
+
+# Calculate and clean-up descriptor
+obabel -ismi "$SMILES" -ofpt -O "/tmp/$(basename "$ECFP4")" -xh -xfECFP4
+
+# Retrieve compound names
+grep '^>' "/tmp/$(basename "$ECFP4")" |\
+	sed "s/^>\(\w\+\).*/\"\1\"/g" > "/tmp/$(basename "$ECFP4")_names"
+
+# Convert hex to binary
+grep -v 'Possible superstructure of' "/tmp/$(basename "$ECFP4")" |\
 	grep -v '>' | paste -d '\0'  - - - - - - - - - - - - - - - - - - - - - -  |\
 	sed s/' '//g | tr "[a-z]" "[A-Z]" | \
 	sed s/0/0000/g | \
@@ -36,4 +41,5 @@ cat "/tmp/$(basename $ECFP4)" |\
 	sed s/E/1110/g | \
 	sed s/F/1111/g | \
 	sed 's/./& /g' | \
-	sed 's/[[:space:]]*$//' > "$ECFP4"
+	sed 's/[[:space:]]*$//' > "/tmp/$(basename "$ECFP4")_binary"
+paste -d" " "/tmp/$(basename "$ECFP4")_names" "/tmp/$(basename "$ECFP4")_binary" > "$ECFP4"
