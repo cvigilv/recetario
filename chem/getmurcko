@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# title           :getmurcko
+# description     :Calculate Murcko scaffolds from SMILES
+# author          :Carlos Vigil Vásquez
+# date            :20220912
+# version         :20220912
+# notes           :Requires pandas, tqdm & rdkit
+# copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
+# license         :Permission to copy and modify is granted under the MIT license
+
+import argparse
+import pandas as pd
+from tqdm import tqdm
+from rdkit import Chem
+from rdkit.Chem.Scaffolds.MurckoScaffold import GetScaffoldForMol, MakeScaffoldGeneric
+
+__version__ = "20221128a"
+__date__ = "2022.11.28"
+__title__ = "getmurcko"
+__desc__ = "Calculate Murcko scaffolds from SMILES"
+
+def get_murcko_scaffold(mol, generic=False):
+    """
+    Calculate Murcko molecular scaffold from molecule.
+    """
+    scaffold = GetScaffoldForMol(mol)
+
+    if generic:
+        scaffold = MakeScaffoldGeneric(scaffold)
+
+    scaffold_smile = Chem.CanonSmiles(Chem.MolToSmiles(scaffold))
+
+    return scaffold_smile, mol.GetProp("_Name")
+
+def main():
+    print(f"{__title__} v{__version__} - {__desc__}\n")
+    # Argument parser {{{
+    parser = argparse.ArgumentParser(description="Calculate Murcko scaffolds")
+    parser.add_argument("-i", "--input", type=str, nargs="+", help="SMILES files")
+    parser.add_argument(
+        "-o", "--output", type=str, default="scaffolds.smi", help="Scaffolds SMILES file"
+    )
+    parser.add_argument("--delim", type=str, default=" ", help="SMILES files delimiter")
+    parser.add_argument("--generic", action="store_boolean", help="Generic Murcko scaffolds")
+    parser.set_defaults(generic = False)
+    args = parser.parse_args()
+
+    print(":: Configuration ::")
+    print("===================")
+    for item, value in vars(args).items():
+        if type(value) is list:
+            value = "; ".join(value)
+        print(f"{item.ljust(10)} = {value}")
+    print()
+    # }}}
+
+    all_mols = [
+        m
+        for m in Chem.SmilesMolSupplier(args.input[0], delimiter=args.delim, titleLine=False)
+        if m != None
+    ]
+
+    all_scaffolds = [
+        get_murcko_scaffold(m, generic = args.generic)
+        for m in all_mols
+    ]
+
+    with open(args.output, "w+") as io:
+        for scaffold, molid in all_scaffolds:
+            io.write(f"{scaffold} {molid}\n")
+
+    print(f"Number of compounds: {len(all_mols)}")
+    print(f"Number of unique scaffolds: {len(set([scf for scf,_ in all_scaffolds]))}")
+
+if __name__ == "__main__":
+    main()
