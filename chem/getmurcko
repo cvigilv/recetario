@@ -41,7 +41,7 @@ def main():
         "-o", "--output", type=str, default="scaffolds.smi", help="Scaffolds SMILES file"
     )
     parser.add_argument("--delim", type=str, default=" ", help="SMILES files delimiter")
-    parser.add_argument("--generic", action="store_boolean", help="Generic Murcko scaffolds")
+    parser.add_argument("--generic", action="store_true", help="Generic Murcko scaffolds")
     parser.set_defaults(generic = False)
     args = parser.parse_args()
 
