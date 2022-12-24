@@ -19,8 +19,9 @@ edgelist = pd.read_csv(
     index_col=None,
     names=["source", "target", "value"],
 )
-matrix = edgelist.pivot_table(columns="source", index="target", values="value")
-matrix.reset_index(drop=True, inplace=True)
+print(edgelist)
+matrix = edgelist.pivot_table(index="source", columns="target", values="value")
 matrix.fillna(0, inplace=True)
+matrix = matrix.astype({c:int for c in matrix.columns})
 
-matrix.to_csv(sys.argv[2], sep=" ", header=False, index=False)
+matrix.to_csv(sys.argv[2], sep=" ")

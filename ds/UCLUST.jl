@@ -128,3 +128,4 @@ function main(args)
     # Save clustered matrix
     writedlm(args["o"], M′, args["delimiter"])
 end
+main(ARGS)

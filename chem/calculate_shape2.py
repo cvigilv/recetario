@@ -227,7 +227,7 @@ def main():
 
         # Parallelized Shape Tanimoto for every possible pair of conformers
         # between reference and query molecule
-        for i,j,similarity in pool.starmap(
+        for ijsimilarity in pool.imap_unordered(
             shape_func,
             zip(
                 comparisons,
@@ -236,8 +236,10 @@ def main():
                 itertools.repeat(args.beta),
             ),
         ):
+            print(ijsimilarity)
             pbar.update(1)
             if similarity > simmat[i,j]:
+                pbar.update(1)
                 simmat[i,j] = similarity
                 simmat[j,i] = similarity
     else:

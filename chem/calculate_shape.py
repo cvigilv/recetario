@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/carlos/.venv/chem/bin/python
 # title           :calculate_shape.py
 # description     :Calculate shape Tanimoto/Tversky similarity matrix
 # author          :Carlos Vigil Vásquez
