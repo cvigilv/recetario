@@ -10,14 +10,47 @@
 
 using Base
 using ArgParse
-using DelimitedFiles
 using ProgressMeter
 using LinearAlgebra
 using NamedArrays
+using DelimitedFiles
 using .Threads
-include("../julia/named_array_helper.jl")
 
 Base.setdiff(A::AbstractVector{Bool}, B::AbstractVector{Bool}) = @. A & !B
+
+DelimitedFiles.writedlm(io::IO, x::NamedMatrix{T} where {T}) = writedlm(io, vcat(["" names(x, 2)...], hcat(names(x, 1), x)))
+DelimitedFiles.writedlm(io::IO, x::NamedMatrix{T} where {T}, delimiter::Char) = writedlm(io, vcat(["" names(x, 2)...], hcat(names(x, 1), x)), delimiter)
+DelimitedFiles.writedlm(io::AbstractString, x::NamedMatrix{T} where {T}, delimiter::Char) = writedlm(io, vcat(["" names(x, 2)...], hcat(names(x, 1), x)), delimiter)
+
+"""
+```
+parse_matrix(M::AbstractMatrix, rows::Bool, cols::Bool; type::Type)
+```
+
+Convert matrix with row/column names to NamedMatrix (assumes names are in firt row/column).
+
+# Arguments
+
+- `M::AbstractMatrix` : Matrix to parse
+- `rows::Bool` : Matrix has row names (default = false)
+- `cols::Bool` : Matrix has column names (default = false)
+- `type::Type` : Type of matrix values (default = Any)
+"""
+function parse_matrix(M::AbstractMatrix, rows::Bool=false, cols::Bool=false; type::Type=Any)
+    # Extract values from matrix
+    c_idx = rows ? 2 : 1
+    r_idx = cols ? 2 : 1
+    values = parse.(type, M[r_idx:end, c_idx:end])
+
+    # Extract dimensions names
+    row_names = rows ? [i for i in String.(M[r_idx:end, 1])] : ["R#$i" for i in 1:size(values, 1)]
+    col_names = cols ? [i for i in String.(M[1, c_idx:end])] : ["C#$i" for i in 1:size(values, 2)]
+
+    namedM = NamedArray(values, (row_names, col_names))
+    namedM = namedM[sort(row_names), sort(col_names)]
+
+    return namedM
+end
 
  """
     Tanimoto(X::AbstractVector{Bool}, Y::AbstractVector{Bool})
@@ -60,9 +93,9 @@ function Tanimoto(M::T, N::T) where {T<:AbstractMatrix}
 end
 
 """
-    Tanimoto(M::T) where {T<:AbstractMatrix}
+    Tanimoto(M::AbstractMatrix)
 """
-function Tanimoto(M::T) where {T<:AbstractMatrix}
+function Tanimoto(M::AbstractMatrix)
     # Check if both matrices have the same number of columns
     Mₘ, _ = size(M)
 
@@ -119,8 +152,8 @@ function main(args)
 
     # Load matrices and get number of drugs, compounds, substructures and targets
     println("Calculating Tversky index matrix from file $(args["ND"])")
-    MD = parse_matrix(readdlm(args["MD"], args["delimiter"], String), true, false; type=Bool)
-    ND = parse_matrix(readdlm(args["ND"], args["delimiter"], String), true, false; type=Bool)
+	MD = parse_matrix(readdlm(args["MD"], args["delimiter"], String), args["named"], false; type=Bool)
+	ND = parse_matrix(readdlm(args["ND"], args["delimiter"], String), args["named"], false; type=Bool)
 
     # Calculate similarity matrix and save
     if MD == ND
@@ -133,6 +166,7 @@ function main(args)
         setnames!(MN, names(MD, 1), 1)
         setnames!(MN, names(ND, 1), 2)
     end
+	print(typeof(MN))
     writedlm(args["MN"], MN, args["delimiter"])
 end
 
