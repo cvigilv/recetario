@@ -9,19 +9,20 @@
 #license         :Permission to copy and modify is granted under the MIT license
 
 SMILES=$1
-ECFP4="$(echo "$SMILES" | sed s/smi/ecfp4.txt/)"
+# ECFP4="$(echo "$SMILES" | sed s/smi/ecfp4.txt/)"
+ECFP4=$2
 
 echo "Calculating OpenBabel's ECFP4 fingerprint for $1"
 
 # Calculate and clean-up descriptor
-obabel -ismi "$SMILES" -ofpt -O "/tmp/$(basename "$ECFP4")" -xh -xfECFP4
+obabel "$SMILES" -ofpt -O "$(basename "$ECFP4")" -xh -xfECFP4
 
 # Retrieve compound names
-grep '^>' "/tmp/$(basename "$ECFP4")" |\
-	sed "s/^>\(\w\+\).*/\"\1\"/g" > "/tmp/$(basename "$ECFP4")_names"
+grep '^>' "$(basename "$ECFP4")" |\
+	sed "s/^>\(\w\+\).*/\"\1\"/g" > "$(basename "$ECFP4")_names"
 
 # Convert hex to binary
-grep -v 'Possible superstructure of' "/tmp/$(basename "$ECFP4")" |\
+grep -v 'Possible superstructure of' "$(basename "$ECFP4")" |\
 	grep -v '>' | paste -d '\0'  - - - - - - - - - - - - - - - - - - - - - -  |\
 	sed s/' '//g | tr "[a-z]" "[A-Z]" | \
 	sed s/0/0000/g | \
@@ -41,5 +42,5 @@ grep -v 'Possible superstructure of' "/tmp/$(basename "$ECFP4")" |\
 	sed s/E/1110/g | \
 	sed s/F/1111/g | \
 	sed 's/./& /g' | \
-	sed 's/[[:space:]]*$//' > "/tmp/$(basename "$ECFP4")_binary"
-paste -d" " "/tmp/$(basename "$ECFP4")_names" "/tmp/$(basename "$ECFP4")_binary" > "$ECFP4"
+	sed 's/[[:space:]]*$//' > "$(basename "$ECFP4")_binary"
+paste -d" " "$(basename "$ECFP4")_names" "$(basename "$ECFP4")_binary" > "$ECFP4"

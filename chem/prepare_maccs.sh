@@ -9,19 +9,19 @@
 #license         :Permission to copy and modify is granted under the MIT license
 
 SMILES=$1
-MACCS="$(echo "$SMILES" | sed s/SMILES/DS/ | sed s/smi/maccs.txt/)"
+MACCS=$2
 
 echo "Calculating OpenBabel's MACCS fingerprint for $1"
 
 # Calculate and clean-up descriptor
-obabel -ismi "$SMILES" -ofpt -O "/tmp/$(basename "$MACCS")" -xh -xfMACCS
+obabel -ismi "$SMILES" -ofpt -O "$(basename "$MACCS")" -xh -xfMACCS
 
 # Retrieve compound names
-grep '^>' "/tmp/$(basename "$MACCS")" |\
-	sed "s/^>\(\w\+\).*/\"\1\"/g" > "/tmp/$(basename "$MACCS")_names"
+grep '^>' "$(basename "$MACCS")" |\
+	sed "s/^>\(\w\+\).*/\"\1\"/g" > "$(basename "$MACCS")_names"
 
 # Convert hex to binary
-grep -v 'Possible superstructure of' "/tmp/$(basename "$MACCS")" |\
+grep -v 'Possible superstructure of' "$(basename "$MACCS")" |\
 	grep -v '>' | paste -d '\0'  - - |\
 	sed s/' '//g | tr "[a-z]" "[A-Z]" | \
 	sed s/0/0000/g | \
@@ -41,5 +41,5 @@ grep -v 'Possible superstructure of' "/tmp/$(basename "$MACCS")" |\
 	sed s/E/1110/g | \
 	sed s/F/1111/g | \
 	sed 's/./& /g' | \
-	sed 's/[[:space:]]*$//' > "/tmp/$(basename "$MACCS")_binary"
-paste -d" " "/tmp/$(basename "$MACCS")_names" "/tmp/$(basename "$MACCS")_binary" > "$MACCS"
+	sed 's/[[:space:]]*$//' > "$(basename "$MACCS")_binary"
+aste -d" " "$(basename "$MACCS")_names" "$(basename "$MACCS")_binary" > "$MACCS"

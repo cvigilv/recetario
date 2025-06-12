@@ -1,22 +1,28 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # title           :getmurcko
-# description     :Calculate Murcko scaffolds from SMILES
+# description     :Calculate Murcko scaffolds for molecules in SMILES file
 # author          :Carlos Vigil Vásquez
 # date            :20220912
-# version         :20220912
-# notes           :Requires pandas, tqdm & rdkit
-# copyright       :Copyright (C) 2022 Carlos Vigil Vásquez (cvigil2@uc.cl).
+# version         :20250430a
+# notes           :Requires pandas, tqdm & rdkit. Run with `uv run getmurcko.py`
+# copyright       :Copyright (C) 2025 Carlos Vigil Vásquez (carlos.vigil.v@gmail.com).
 # license         :Permission to copy and modify is granted under the MIT license
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "rdkit",
+#     "tqdm",
+# ]
+# ///
 
 import argparse
-import pandas as pd
-from tqdm import tqdm
+from datetime import datetime
 from rdkit import Chem
 from rdkit.Chem.Scaffolds.MurckoScaffold import GetScaffoldForMol, MakeScaffoldGeneric
 
-__version__ = "20221128a"
-__date__ = "2022.11.28"
-__title__ = "getmurcko"
+__version__ = "20250430a"
+__date__ = datetime.now().strftime("%Y-%m-%d")
+__title__ = "getmurcko.py"
 __desc__ = "Calculate Murcko scaffolds from SMILES"
 
 def get_murcko_scaffold(mol, generic=False):
@@ -34,25 +40,14 @@ def get_murcko_scaffold(mol, generic=False):
 
 def main():
     print(f"{__title__} v{__version__} - {__desc__}\n")
-    # Argument parser {{{
+    # Argument parser
     parser = argparse.ArgumentParser(description="Calculate Murcko scaffolds")
-    parser.add_argument("-i", "--input", type=str, nargs="+", help="SMILES files")
-    parser.add_argument(
-        "-o", "--output", type=str, default="scaffolds.smi", help="Scaffolds SMILES file"
-    )
+    parser.add_argument("-i", "--input", type=str, nargs="+", help="SMILES files", required=True)
+    parser.add_argument("-o", "--output", type=str, default="", help="Scaffolds SMILES file")
     parser.add_argument("--delim", type=str, default=" ", help="SMILES files delimiter")
     parser.add_argument("--generic", action="store_true", help="Generic Murcko scaffolds")
     parser.set_defaults(generic = False)
     args = parser.parse_args()
-
-    print(":: Configuration ::")
-    print("===================")
-    for item, value in vars(args).items():
-        if type(value) is list:
-            value = "; ".join(value)
-        print(f"{item.ljust(10)} = {value}")
-    print()
-    # }}}
 
     all_mols = [
         m
